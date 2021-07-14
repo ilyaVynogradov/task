@@ -7,6 +7,7 @@ import FileType from 'file-type';
 import mkdirp from 'mkdirp';
 import { resolve } from 'path/posix';
 import { rejects } from 'assert/strict';
+import pool from './db';
 
 const app: Application = express();
 const port = 8000;
@@ -18,7 +19,6 @@ app.use(express.urlencoded({ extended: true }));
 
 const clearFilePath = (filePath: string) => {
     return new Promise(async (resolve, reject) => {
-    console.log(filePath);
         try {
             let files = [];
             if( fs.existsSync(filePath) ) {
@@ -68,25 +68,24 @@ const downloadFile = (fileUrl: string, downloadFolder: string) => {
 
 const checkType = async(imgUrl: string) => {
         const type = await FileType.fromFile(__dirname + '/download/'+ path.basename(imgUrl));
-        console.log(type);
-        if (type.ext == 'jpg' || 'jpeg' || 'png') {
-            console.log(type.ext);
+        if (['jpg', 'png'].includes(type.ext)) {
+            console.log(type.ext + ' type');
             return {
                 isValid: true
             }
         } else {
+            console.log(type.ext + ' type');
             clearFilePath(__dirname + '/download');
-            console.log(type.ext);
             return {
-                isValid: false
+               isValid: false
             }
         }
 };
 
-const resizePicture = (imgUrl: string, resizeFolder: string) => {
+const resizePicture = (imgUrl: string, resizeFolder: string): Object => {
     return new Promise((resolve, reject) =>
     {
-        const fileName = path.basename(imgUrl)
+        const fileName = path.basename(imgUrl);
         const localFilePath = path.resolve(__dirname, resizeFolder, fileName);
 
         let inputFile = __dirname + '/download/' + fileName;
@@ -97,7 +96,7 @@ const resizePicture = (imgUrl: string, resizeFolder: string) => {
                 console.log("Success");
                 resolve(newFileInfo);
             })
-            .catch(function (error: any) {
+            .catch(function (error: any) {  
                 console.log(`Error: ${error.message}`);
                 reject(error)
             });
@@ -120,15 +119,37 @@ try{
 
             await downloadFile(imgUrl, mkdirp.sync(__dirname + '/download/'));
 
-            const typeValidationResult = await checkType(imgUrl)
+            const typeValidationResult = await checkType(imgUrl)            
             isValidFileType = typeValidationResult.isValid;
+            console.log(isValidFileType);
+            
         } while (isValidFileType === false)
         
-        const resizedImageInfo = await resizePicture(imgUrl, mkdirp.sync(__dirname + '/download/resized'))
-        // TODO You need to add this info in db
+        let resizedImageInfo = new Object();
+        resizedImageInfo = await resizePicture(imgUrl, mkdirp.sync(__dirname + '/download/resized'));
+
+        console.log(typeof(resizedImageInfo));
+        console.log(resizedImageInfo);
+
+        const fileName = path.basename(imgUrl);
+        
+        const params = Object.values(resizedImageInfo);
+        
+        const finalWidth: number = params[1];
+        const finalHeight: number = params[2];
+        const fileSize: number = params[5];
+        
+        const dogImageInfo = [fileName, finalWidth, finalHeight, fileSize ]; 
+
+        pool.connect( (error, client, done) => {
+            console.log('Connected');
+        });
+        pool.query(`INSERT INTO dogimage (filename, width, height, size) values ($1, $2, $3, $4) RETURNING *`,
+                    [fileName, finalWidth, finalHeight, fileSize] );
 
       return res.status(200).send({
           resizedImageInfo,
+          fileName,
       });
     }
   );
