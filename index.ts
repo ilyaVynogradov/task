@@ -5,8 +5,8 @@ import path from 'path';
 import sharp from 'sharp';
 import FileType from 'file-type';
 import mkdirp from 'mkdirp';
-import { clear } from 'console';
-
+import { resolve } from 'path/posix';
+import { rejects } from 'assert/strict';
 
 const app: Application = express();
 const port = 8000;
@@ -17,21 +17,28 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const clearFilePath = (filePath: string) => {
-    try {
-        if (fs.existsSync(filePath)) {
-            fs.readdirSync(filePath).forEach((file, index) => {
-                var curPath = path + "/" + file;
-                if (fs.lstatSync(curPath).isDirectory()) {
-                    clearFilePath(curPath);
-                } else {
-                    fs.unlinkSync(curPath)
-                }
-            });
+    return new Promise(async (resolve, reject) => {
+    console.log(filePath);
+        try {
+            let files = [];
+            if( fs.existsSync(filePath) ) {
+                files = fs.readdirSync(filePath);
+                files.forEach(function(file){
+                    let curPath = filePath + "/" + file;
+                    if(fs.statSync(curPath).isDirectory()) {
+                        clearFilePath(curPath);
+                    } else {
+                    fs.unlinkSync(curPath);
+                    }
+                });
             fs.rmdirSync(filePath);
+            }
+            resolve('success');
+        } catch (error) {
+            console.log(`Error: ${error.message}`);
+            reject(error);
         }
-    } catch (error) {
-        console.log(`Error: ${error.message}`);
-    }
+    })
 }
 
 const downloadFile = (fileUrl: string, downloadFolder: string) => {
@@ -68,6 +75,7 @@ const checkType = async(imgUrl: string) => {
                 isValid: true
             }
         } else {
+            clearFilePath(__dirname + '/download');
             console.log(type.ext);
             return {
                 isValid: false
@@ -82,7 +90,7 @@ const resizePicture = (imgUrl: string, resizeFolder: string) => {
         const localFilePath = path.resolve(__dirname, resizeFolder, fileName);
 
         let inputFile = __dirname + '/download/' + fileName;
-        let outputFile = localFilePath + fileName;
+        let outputFile = localFilePath + fileName ;
 
         sharp(inputFile).resize({height: Resize.finalHeight, width: Resize.finalWidth}).toFile(outputFile)
             .then(function (newFileInfo: any) {
@@ -103,7 +111,7 @@ try{
         let isValidFileType = false;
         let imgUrl;
         do {
-            await clearFilePath(__dirname);
+            await clearFilePath(__dirname + '/download');
 
             const result = await (axios.get('https://random.dog/woof.json'));
 
