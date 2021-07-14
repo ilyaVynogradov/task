@@ -8,6 +8,7 @@ import mkdirp from 'mkdirp';
 import { resolve } from 'path/posix';
 import { rejects } from 'assert/strict';
 import pool from './db';
+import pgp from 'pg-promise';
 
 const app: Application = express();
 const port = 8000;
@@ -138,14 +139,13 @@ try{
         const finalWidth: number = params[1];
         const finalHeight: number = params[2];
         const fileSize: number = params[5];
-        
-        const dogImageInfo = [fileName, finalWidth, finalHeight, fileSize ]; 
+        const format: string = params[0];
 
-        pool.connect( (error, client, done) => {
-            console.log('Connected');
+        pool.connect( () => {
+            console.log('Connected to DB');
         });
-        pool.query(`INSERT INTO dogimage (filename, width, height, size) values ($1, $2, $3, $4) RETURNING *`,
-                    [fileName, finalWidth, finalHeight, fileSize] );
+        pool.query(`INSERT INTO dogimage (filename, width, height, size, format) values ($1, $2, $3, $4, $5) RETURNING *`,
+                    [fileName, finalWidth, finalHeight, fileSize, format] );
 
       return res.status(200).send({
           resizedImageInfo,
@@ -155,6 +155,31 @@ try{
   );
 } catch (error) {
   console.log(`Error: ${error.message}`);
+}
+
+try {
+    app.get(
+        '/list/dog/images',
+        async (req: Request, res: Response): Promise<Response> => {
+
+            pool.connect( () => {
+                console.log('Connected to DB');
+            });
+
+            const format: string = 'jpeg'
+            
+            const images = pool.query('SELECT * FROM dogimage WHERE format = $1', [format]);
+
+            const result = res.json((await images).rows);
+            
+            return res.status(200).send({
+                result
+            })
+        }
+    )
+
+} catch (error) {
+    console.log(`Error: ${error.message}`);
 }
 
 try {
