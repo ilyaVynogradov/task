@@ -13,26 +13,26 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
+const axios_1 = __importDefault(require("axios"));
 const app = express_1.default();
-const port = 3000;
+const port = 8000;
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
-app.get('/', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    return res.status(200).send({
-        message: 'Done!'
-    });
-}));
-// app.post(
-//   '/upload/dog/image',
-//   async (req: Request, res: Response): Promise<Response> => {
-//     const result = await (axios.get('https://random.dog/woof.json'));
-//     const data = await res.json();
-//     console.log(data);
-//     return res.status(200).send({
-//       message: 'Done!',
-//     });
-//   },
-// );
+try {
+    app.post('/upload/dog/image', (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+        const result = yield (axios_1.default.get('https://random.dog/woof.json'));
+        const fin = result.data;
+        const myUrl = fin.url;
+        console.log(myUrl);
+        return res.status(200).send({
+            message: "done",
+            fin,
+        });
+    }));
+}
+catch (error) {
+    console.log(`Error: ${error.message}`);
+}
 try {
     app.listen(port, () => {
         console.log(`Server is listening on port ${port}`);
