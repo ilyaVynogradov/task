@@ -1,4 +1,4 @@
-import express, { Application, request, Request, Response } from 'express';
+import express, { Application, request, Request, response, Response } from 'express';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
@@ -8,7 +8,7 @@ import mkdirp from 'mkdirp';
 import { resolve } from 'path/posix';
 import { rejects } from 'assert/strict';
 import pool from './db';
-import pgp from 'pg-promise';
+import imageToBase64 from 'image-to-base64';
 
 const app: Application = express();
 const port = 8000;
@@ -42,7 +42,7 @@ const clearFilePath = (filePath: string) => {
     })
 }
 
-const downloadFile = (fileUrl: string, downloadFolder: string) => {
+const downloadPicture = (fileUrl: string, downloadFolder: string) => {
     return new Promise(async (resolve, reject) => {
         const fileName = path.basename(fileUrl);
         const localFilePath = path.resolve(__dirname, downloadFolder, fileName);
@@ -57,7 +57,7 @@ const downloadFile = (fileUrl: string, downloadFolder: string) => {
             const w = response.data.pipe(fs.createWriteStream(localFilePath));
             w.on('finish', () => {
                 resolve('success');
-                console.log('Image downloaded');
+                console.log('File downloaded');
             });
     
         } catch (error) {
@@ -90,18 +90,31 @@ const resizePicture = (imgUrl: string, resizeFolder: string): Object => {
         const localFilePath = path.resolve(__dirname, resizeFolder, fileName);
 
         let inputFile = __dirname + '/download/' + fileName;
-        let outputFile = localFilePath + fileName ;
+        let outputFile = localFilePath;
 
         sharp(inputFile).resize({height: Resize.finalHeight, width: Resize.finalWidth}).toFile(outputFile)
             .then(function (newFileInfo: any) {
-                console.log("Success");
+                console.log("Successfully resized");
                 resolve(newFileInfo);
             })
             .catch(function (error: any) {  
                 console.log(`Error: ${error.message}`);
-                reject(error)
+                reject(error);
             });
     });
+}
+const convertPicture = (imgUrl: string) => {
+    return new Promise((resolve, reject) => {
+        imageToBase64(imgUrl)
+            .then((img64) => {
+                console.log(img64);
+                resolve(img64);
+            })
+            .catch(function (error: any) {
+                console.log(`Error: ${error.message}`);
+                reject(error);
+            })
+    })
 }
 
 try{
@@ -118,9 +131,9 @@ try{
             const fin = result.data;
             imgUrl = fin.url;
 
-            await downloadFile(imgUrl, mkdirp.sync(__dirname + '/download/'));
+            await downloadPicture(imgUrl, mkdirp.sync(__dirname + '/download/'));
 
-            const typeValidationResult = await checkType(imgUrl)            
+            const typeValidationResult = await checkType(imgUrl);
             isValidFileType = typeValidationResult.isValid;
             console.log(isValidFileType);
             
@@ -128,11 +141,13 @@ try{
         
         let resizedImageInfo = new Object();
         resizedImageInfo = await resizePicture(imgUrl, mkdirp.sync(__dirname + '/download/resized'));
+        const img64 = await convertPicture(__dirname + '/download/resized/' + path.basename(imgUrl)); 
 
         console.log(typeof(resizedImageInfo));
         console.log(resizedImageInfo);
 
         const fileName = path.basename(imgUrl);
+        
         
         const params = Object.values(resizedImageInfo);
         
@@ -144,8 +159,8 @@ try{
         pool.connect( () => {
             console.log('Connected to DB');
         });
-        pool.query(`INSERT INTO dogimage (filename, width, height, size, format) values ($1, $2, $3, $4, $5) RETURNING *`,
-                    [fileName, finalWidth, finalHeight, fileSize, format] );
+        pool.query(`INSERT INTO dogimage (filename, width, height, size, format, img64) values ($1, $2, $3, $4, $5, $6) RETURNING *`,
+                    [fileName, finalWidth, finalHeight, fileSize, format, img64] );
 
       return res.status(200).send({
           resizedImageInfo,
@@ -165,7 +180,7 @@ try {
             pool.connect( () => {
                 console.log('Connected to DB');
             });
-            
+
             let format: string = req.params.format;
 
             const images = pool.query('SELECT * FROM dogimage WHERE format = $1', [format]);
