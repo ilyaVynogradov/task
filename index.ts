@@ -1,8 +1,8 @@
-import express, { Application, Request, Response } from 'express';
+import express, { Application, request, Request, Response } from 'express';
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
-import sharp from 'sharp';
+import sharp, { format } from 'sharp';
 import FileType from 'file-type';
 import mkdirp from 'mkdirp';
 import { resolve } from 'path/posix';
@@ -159,15 +159,15 @@ try{
 
 try {
     app.get(
-        '/list/dog/images',
+        '/list/dog/images/:format',
         async (req: Request, res: Response): Promise<Response> => {
 
             pool.connect( () => {
                 console.log('Connected to DB');
             });
-
-            const format: string = 'jpeg'
             
+            let format: string = req.params.format;
+
             const images = pool.query('SELECT * FROM dogimage WHERE format = $1', [format]);
 
             const result = res.json((await images).rows);
